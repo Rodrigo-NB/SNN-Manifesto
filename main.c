@@ -543,7 +543,7 @@ void model_prompt_response(Model* m, unsigned char* prompt, int response_length)
 int main(int argc, char *argv[]) {
 
     TrainingData training;
-    load_training_data(&training, "train_v2_drcat_02.csv");
+    load_training_data(&training, "Frankenstein.txt");
 
     FILE *file_loss = fopen(FILE_NAME, "w"); fclose(file_loss);
 
@@ -574,7 +574,7 @@ int main(int argc, char *argv[]) {
             fclose(file_loss);
     
             printf("\rt=%d,000, loss=%5.3f: ", t/1000, validation_loss);
-            model_prompt_response(&m, (unsigned char*)"insert your validation prompt here ", 80);
+            model_prompt_response(&m, (unsigned char*)"It was on a dreary night of November ", 80);
             printf("\n"); 
         }
         printf("\rt=%d", t); fflush(stdout);
