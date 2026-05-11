@@ -513,12 +513,18 @@ int model_inference(Model* m) {
     return sampled_index;
 }
 
-static void print_char_safely(const unsigned char c) {
-    if (isprint(c)) {
-        printf("%c", c);
+static void print_char_safely(unsigned char c) {
+    if (c == '\n') {
+        putchar('\n');
+    }
+    else if (c == '\t') {
+        putchar('\t');
+    }
+    else if (isprint(c)) {
+        putchar(c);
     }
     else {
-        printf("0x%02x", c);
+        printf("   0x%02x   ", c);
     }
 }
 
