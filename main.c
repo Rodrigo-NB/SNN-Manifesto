@@ -558,7 +558,7 @@ void model_prompt_response(Model* m, unsigned char* prompt, int response_length)
 int main(int argc, char *argv[]) {
 
     TrainingData training;
-    load_training_data(&training, "frankenstein.txt");
+    load_training_data(&training, "train_v2_drcat_02.csv");
 
     FILE *file_loss = fopen(FILE_NAME, "w"); fclose(file_loss);
 
