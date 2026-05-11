@@ -550,7 +550,7 @@ int main(int argc, char *argv[]) {
     Model m;
     build_Model(&m);
     
-    for (int t = 0; t < 100000000; t++) {
+    for (int t = 0; t < 1000000; t++) {
 
         load_snippet(&m, &training, get_random_training_index(&training));
         learning_rate = LEARNING_RATE; // Adam scheduler
@@ -568,13 +568,14 @@ int main(int argc, char *argv[]) {
                 validation_loss += -log(m.output[CONTEXT_SIZE-1][m.tokens[CONTEXT_SIZE]]);
             }
             validation_loss /= TESTING_LENGTH;
+            float perplexity = expf(validation_loss);
 
             FILE *file_loss = fopen(FILE_NAME, "a");
-            fprintf(file_loss, "%d, %f\n", t, validation_loss);
+            fprintf(file_loss, "%d, %f, %f\n", t, validation_loss, perplexity);
             fclose(file_loss);
     
-            printf("\rt=%d,000, loss=%5.3f: ", t/1000, validation_loss);
-            model_prompt_response(&m, (unsigned char*)"It was on a dreary night of November ", 80);
+            printf("\rt=%d,000, loss=%5.3f, perplexity=%5.3f: ", t/1000, validation_loss, perplexity);
+            model_prompt_response(&m, (unsigned char*)"I am ", 200);
             printf("\n"); 
         }
         printf("\rt=%d", t); fflush(stdout);
