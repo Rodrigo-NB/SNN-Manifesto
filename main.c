@@ -513,6 +513,15 @@ int model_inference(Model* m) {
     return sampled_index;
 }
 
+static void print_char_safely(const unsigned char c) {
+    if (isprint(c)) {
+        printf("%c", c);
+    }
+    else {
+        printf("0x%02x", c);
+    }
+}
+
 void model_prompt_response(Model* m, unsigned char* prompt, int response_length) {
 
     unsigned char prompt_copy[CONTEXT_SIZE+1];
@@ -524,7 +533,7 @@ void model_prompt_response(Model* m, unsigned char* prompt, int response_length)
             embed_token(m, prompt_copy, pos, m->z[pos]);
         }
         int response = model_inference(m);
-        printf("%c", (unsigned char)response);
+        print_char_safely(response);
 
         // shift the prompt by one character and insert response as the last character
         for (int j = 0; j < CONTEXT_SIZE-1; j++) {
