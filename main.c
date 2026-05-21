@@ -24,7 +24,8 @@
 #define NUM_HEADS               4
 
 #define N_T                     16      
-#define N_C                     6     
+#define N_C                     6
+#define N_C_ATTN                3
 
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
@@ -45,6 +46,11 @@ typedef struct {
     int a[N_C];     
     int b[N_C];
 } Anchors;
+
+typedef struct {
+    int a[N_C_ATTN];     
+    int b[N_C_ATTN];
+} AnchorsAttention;
 
 typedef struct {
     int y_dim;       // dimension of the output y
@@ -149,12 +155,12 @@ void fill_vector_with_random_intergers_different_from_vector2(int* vector, int* 
     }
 }
 
-void build_LUT(LUT* lut, int total_n_c, int y_dim) {
+void build_LUT(LUT* lut, int n_c, int total_n_c, int y_dim) {
 
     lut->y_dim = y_dim;
     for (int i = 0; i < N_T; i++) {
-        fill_vector_with_random_intergers(lut->anchors[i].a, N_C, EMBEDDING_DIM);
-        fill_vector_with_random_intergers_different_from_vector2(lut->anchors[i].b, lut->anchors[i].a, N_C, EMBEDDING_DIM);
+        fill_vector_with_random_intergers(lut->anchors[i].a, n_c, EMBEDDING_DIM);
+        fill_vector_with_random_intergers_different_from_vector2(lut->anchors[i].b, lut->anchors[i].a, n_c, EMBEDDING_DIM);
         lut->S[i] = (float*)calloc(  (1 << total_n_c) * y_dim, sizeof(float));
         memset(lut->S[i], 0, (1 << total_n_c) * y_dim * sizeof(float));
     }
@@ -167,13 +173,13 @@ void free_LUT(LUT* lut) {
     }
 }
 
-void cache_index(LUT* lut, LUTcache* cache, float* x) {
+void cache_index(LUT* lut, LUTcache* cache, float* x, int n_c) {
 
     for (int i = 0; i < N_T; i++) { 
         cache->j[i] = 0;
         cache->u_min[i] = INFINITY;
 
-        for (int r = 0; r < N_C; r++) { // loop over all comparisons per table
+        for (int r = 0; r < n_c; r++) { // loop over all comparisons per table
             float u = x[lut->anchors[i].a[r]] - x[lut->anchors[i].b[r]];
             if (u > 0) {
                 cache->j[i] |= (1 << r); // concatenation 
@@ -241,7 +247,7 @@ void LUT_backward(LUT* lut, LUTcache* cache, float* x_gradient, float* y_gradien
     }
 }
 
-#define CONCATENATE(Q, P, PE) ((((Q) << (N_C+POSITIONAL_DIM)) | ((P) << POSITIONAL_DIM) | (PE)) * lut->y_dim)
+#define CONCATENATE(Q, P, PE) ((((Q) << (N_C_ATTN+POSITIONAL_DIM)) | ((P) << POSITIONAL_DIM) | (PE)) * lut->y_dim)
 
 
 void concatenated_LUT_forward(LUT* lut,  LUTcache* cacheQ, LUTcache* cacheK, LUTcache* cachePE, float* y) {
@@ -291,14 +297,14 @@ void build_Model(Model* m) {
  
     for (int l = 0; l < NUM_LAYERS; l++) {
         // the inputs are z_pos
-        build_LUT(&m->FFN[l], N_C, EMBEDDING_DIM); 
+        build_LUT(&m->FFN[l], N_C, N_C, EMBEDDING_DIM); 
         for (int h = 0; h < NUM_HEADS; h++) {
             random_vector(m->head[l][h].Positional_encoding[0][0], CONTEXT_SIZE*N_T*POSITIONAL_DIM, 1.0f);
             // the inputs are concatenated [Q, P, PE]
-            build_LUT(&m->head[l][h].V, N_C + N_C + POSITIONAL_DIM, EMBEDDING_DIM); 
+            build_LUT(&m->head[l][h].V, N_C_ATTN, N_C_ATTN + N_C_ATTN + POSITIONAL_DIM, EMBEDDING_DIM); 
         }
     }
-    build_LUT(&m->unembedder,  N_C, VOCAB_SIZE);
+    build_LUT(&m->unembedder, N_C, N_C, VOCAB_SIZE);
 }
 
 void free_Model(Model* m) {
@@ -315,7 +321,7 @@ void free_Model(Model* m) {
 void attention_forward(AttentionHead* head, float x[CONTEXT_SIZE][EMBEDDING_DIM], float y[CONTEXT_SIZE][EMBEDDING_DIM]) {
 
     for (int pos = 0; pos < CONTEXT_SIZE; pos++) { 
-        cache_index(&head->V, &head->V_cache[pos], x[pos]);
+        cache_index(&head->V, &head->V_cache[pos], x[pos], N_C_ATTN);
         cache_PE_index(&head->PE_cache[pos], head->Positional_encoding[pos]);
     }
     
@@ -360,14 +366,14 @@ void model_forward(Model* m) {
         // FFN from z_pos to z_pos.
         // For attention-only mode, comment the 4 lines below and 3 lines in the next function
         for (int pos = 0; pos < CONTEXT_SIZE; pos++) {
-            cache_index(&m->FFN[l], &m->FFN_cache[l][pos], m->z[pos]);    // resnet connections: from m->z
+            cache_index(&m->FFN[l], &m->FFN_cache[l][pos], m->z[pos], N_C);    // resnet connections: from m->z
             LUT_forward(&m->FFN[l], &m->FFN_cache[l][pos], m->z[pos]);    // back to m->z
         }
     }
     
     memset(m->output, 0, CONTEXT_SIZE*VOCAB_SIZE*sizeof(float));
     for (int pos = 0; pos < CONTEXT_SIZE; pos++) {
-        cache_index(&m->unembedder, &m->unembedder_vars[pos], m->z[pos]);    
+        cache_index(&m->unembedder, &m->unembedder_vars[pos], m->z[pos], N_C);    
         LUT_forward(&m->unembedder, &m->unembedder_vars[pos], m->output[pos]); 
     }
 }
