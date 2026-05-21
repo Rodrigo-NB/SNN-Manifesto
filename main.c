@@ -3,6 +3,7 @@
 /* The code strives for simplicity, not efficiency. */
 /* Eugene Izhikevich, October 2025 */
 
+#define _POSIX_C_SOURCE 199309L
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -531,7 +532,7 @@ static void print_char_safely(unsigned char c) {
 void model_prompt_response(Model* m, unsigned char* prompt, int response_length) {
 
     unsigned char prompt_copy[CONTEXT_SIZE+1];
-    strlcpy((char *)prompt_copy, (const char *)prompt, CONTEXT_SIZE+1); // Need to fix: what if the prompt is too short?
+    snprintf((char *)prompt_copy, CONTEXT_SIZE + 1, "%s", (const char *)prompt); // Need to fix: what if the prompt is too short?
     printf("%s", prompt_copy);
 
     for (int i = 0; i < response_length; i++) {
@@ -550,6 +551,11 @@ void model_prompt_response(Model* m, unsigned char* prompt, int response_length)
 }
 
 
+double now_seconds() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec + ts.tv_nsec * 1e-9;
+}
 
 
 // =================================================================================
@@ -565,6 +571,8 @@ int main(int argc, char *argv[]) {
     Model m;
     build_Model(&m);
     
+    double timer_start = now_seconds();
+
     for (int t = 0; t < 1000000; t++) {
 
         load_snippet(&m, &training, get_random_training_index(&training));
@@ -572,6 +580,11 @@ int main(int argc, char *argv[]) {
         model_training_step(&m);
     
         if (t % 10000 == 0) {
+            double tokens_per_second = 0.0;
+            if (t > 0) {
+                double dt = now_seconds() - timer_start;
+                tokens_per_second = (10000.0 * CONTEXT_SIZE) / dt;
+            }
 
             printf("...validating... "); fflush(stdout);
             float validation_loss = 0;
@@ -588,10 +601,12 @@ int main(int argc, char *argv[]) {
             FILE *file_loss = fopen(FILE_NAME, "a");
             fprintf(file_loss, "%d, %f, %f\n", t, validation_loss, perplexity);
             fclose(file_loss);
-    
-            printf("\rt=%d,000, loss=%5.3f, perplexity=%5.3f: ", t/1000, validation_loss, perplexity);
+
+            printf("\rt=%d,000, loss=%5.3f, perplexity=%5.3f, tok/s=%8.1f: ", t/1000, validation_loss, perplexity, tokens_per_second);
             model_prompt_response(&m, (unsigned char*)"I am ", 200);
-            printf("\n"); 
+            printf("\n");
+
+            timer_start = now_seconds();
         }
         printf("\rt=%d", t); fflush(stdout);
     }
